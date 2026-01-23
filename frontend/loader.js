@@ -8,6 +8,7 @@ const initLoader = () => {
     const detectionStatus = document.getElementById('detectionStatus');
     const statusText = detectionStatus?.querySelector('.status-text');
     const loaderTimestamp = document.getElementById('loaderTimestamp');
+    const loaderQuote = document.getElementById('loader-quote');
 
     if (!loaderWrapper) {
         console.error("Loader wrapper not found!");
@@ -26,7 +27,7 @@ const initLoader = () => {
     const targetProgress = 100;
     let currentStatus = 0;
     const startTime = Date.now();
-    const minimumDuration = 2500; // 2.5 seconds (Optimized for better UX)
+    const minimumDuration = 3500; // 3.5 seconds (Optimized for better UX)
 
     // Safety Timeout - Force remove loader after 7 seconds if it gets stuck
     setTimeout(() => {
@@ -82,6 +83,46 @@ const initLoader = () => {
     // Countdown Timer Animation - Smooth progression from 0 to 100
     let lastFrameTime = startTime;
 
+    // Pre-process loader quotes for typing effect
+    let allChars = [];
+    if (loaderQuote && !loaderQuote.dataset.processed) {
+        loaderQuote.dataset.processed = "true";
+
+        const processNode = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                const text = node.textContent;
+                // Skip empty text nodes that are just whitespace to avoid weird spacing gaps if flex/grid were used, 
+                // but for standard flow, whitespace is needed. However, large blocks of whitespace can be ignored.
+                if (text.trim().length === 0 && text.length > 0) {
+                    // Keep the whitespace node as is
+                    return;
+                }
+
+                const fragment = document.createDocumentFragment();
+                const map = text.split('');
+                map.forEach(char => {
+                    const span = document.createElement('span');
+                    span.textContent = char;
+                    span.style.opacity = '0.5'; // Start dim
+                    span.style.transition = 'opacity 0.1s ease';
+                    fragment.appendChild(span);
+                    allChars.push(span);
+                });
+                node.replaceWith(fragment);
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.tagName !== 'BR') {
+                    Array.from(node.childNodes).forEach(processNode);
+                }
+            }
+        };
+
+        Array.from(loaderQuote.childNodes).forEach(processNode);
+
+        // Reveal the quote container after processing spans
+        // Synchronous update to prevent frame flicker
+        loaderQuote.style.opacity = '1';
+    }
+
     function animateLoader() {
         const now = Date.now();
         const elapsed = now - startTime;
@@ -94,6 +135,31 @@ const initLoader = () => {
 
         if (loaderPercent) {
             loaderPercent.textContent = Math.floor(progress);
+        }
+
+        if (allChars.length > 0) {
+            const totalChars = allChars.length;
+            // Calculate how many characters should be lit up based on progress
+            // We want all chars lit by 100%
+            const charsToLight = Math.floor((progress / 100) * totalChars);
+
+            allChars.forEach((charSpan, index) => {
+                if (index < charsToLight) {
+                    charSpan.style.opacity = '1';
+                    // Optional: Add a slight "hot" glow to the latest character
+                    if (index === charsToLight - 1) {
+                        charSpan.style.textShadow = '0 0 8px rgba(255, 255, 255, 0.8)';
+                    } else {
+                        charSpan.style.textShadow = 'none';
+                    }
+                } else {
+                    charSpan.style.opacity = '0.5';
+                    charSpan.style.textShadow = 'none';
+                }
+            });
+        } else if (loaderQuote) {
+            // Fallback if processing failed
+            loaderQuote.style.opacity = progress / 100;
         }
 
         // Only finish when minimum time has elapsed and we're at 100%
